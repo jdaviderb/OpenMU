@@ -6322,7 +6322,7 @@
       <Code>F3</Code>
       <SubCode>03</SubCode>
       <Name>CharacterInformationExtended</Name>
-      <Length>92</Length>
+      <Length>96</Length>
       <Direction>ServerToClient</Direction>
       <SentWhen>After the character was selected by the player and entered the game.</SentWhen>
       <CausedReaction>The characters enters the game world.</CausedReaction>
@@ -6479,9 +6479,8 @@
           <Type>Byte</Type>
           <Name>InventoryExtensions</Name>
         </Field>
-        <!-- 1 spare byte here -->
         <Field>
-          <Index>90</Index>
+          <Index>89</Index>
           <Type>ShortLittleEndian</Type>
           <Name>Resets</Name>
         </Field>
