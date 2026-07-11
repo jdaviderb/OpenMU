@@ -46,6 +46,17 @@ public enum SpecialItemType
     /// The jewel special item type.
     /// </summary>
     Jewel,
+
+    /// <summary>
+    /// A wing without randomly generated options. This is useful for explicit
+    /// normal-wing reward pools which must not inherit global option chances.
+    /// </summary>
+    WingWithoutOptions,
+
+    /// <summary>
+    /// A premium wing with guaranteed luck and one valid wing option.
+    /// </summary>
+    WingWithGoodOptions,
 }
 
 /// <summary>

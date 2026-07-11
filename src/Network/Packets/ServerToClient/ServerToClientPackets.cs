@@ -17419,6 +17419,15 @@ public readonly struct CharacterInformationExtended
     }
 
     /// <summary>
+    /// Gets or sets the resets.
+    /// </summary>
+    public ushort Resets
+    {
+        get => ReadUInt16LittleEndian(this._data.Span[89..]);
+        set => WriteUInt16LittleEndian(this._data.Span[89..], value);
+    }
+
+    /// <summary>
     /// Performs an implicit conversion from a Memory of bytes to a <see cref="CharacterInformationExtended"/>.
     /// </summary>
     /// <param name="packet">The packet as span.</param>

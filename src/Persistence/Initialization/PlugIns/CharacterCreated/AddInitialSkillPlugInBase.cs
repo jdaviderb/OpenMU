@@ -52,6 +52,12 @@ public class AddInitialSkillPlugInBase : ICharacterCreatedPlugIn
             return;
         }
 
+        if (createdCharacter.LearnedSkills.Any(entry => entry.Skill?.Number == skillDefinition.Number))
+        {
+            player.Logger.LogDebug("Skill {SkillNumber} is already assigned to the new character.", skillDefinition.Number);
+            return;
+        }
+
         var skillEntry = player.PersistenceContext.CreateNew<SkillEntry>();
         skillEntry.Skill = skillDefinition;
         createdCharacter.LearnedSkills.Add(skillEntry);

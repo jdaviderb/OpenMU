@@ -7,6 +7,7 @@ namespace MUnique.OpenMU.Tests;
 using Moq;
 using MUnique.OpenMU.DataModel.Configuration;
 using MUnique.OpenMU.DataModel.Configuration.Items;
+using MUnique.OpenMU.DataModel.Entities;
 using MUnique.OpenMU.GameLogic;
 using MUnique.OpenMU.GameLogic.Attributes;
 
@@ -111,6 +112,41 @@ public class DropGeneratorTest
         Assert.That(config.ExcellentItemDropLevelDelta, Is.EqualTo(50));
     }
 
+    /// <summary>
+    /// Verifies that the normal Box of Wing branch never inherits random options.
+    /// </summary>
+    [Test]
+    public void TestWingWithoutOptions()
+    {
+        var generator = new DefaultDropGenerator(this.GetGameConfig(), this.GetMinimumRandomizer());
+        var wing = this.CreateWingDefinition();
+        var group = this.CreateWingDropGroup(SpecialItemType.WingWithoutOptions, wing, 0, 7);
+
+        var item = generator.GenerateItemDrop(group);
+
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.Level, Is.EqualTo(0));
+        Assert.That(item.ItemOptions, Is.Empty);
+    }
+
+    /// <summary>
+    /// Verifies that the premium Box of Wing branch guarantees luck and a wing stat.
+    /// </summary>
+    [Test]
+    public void TestWingWithGoodOptions()
+    {
+        var generator = new DefaultDropGenerator(this.GetGameConfig(), this.GetMinimumRandomizer());
+        var wing = this.CreateWingDefinition();
+        var group = this.CreateWingDropGroup(SpecialItemType.WingWithGoodOptions, wing, 9, 13);
+
+        var item = generator.GenerateItemDrop(group);
+
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.Level, Is.EqualTo(9));
+        Assert.That(item.ItemOptions.Any(link => link.ItemOption?.OptionType == ItemOptionTypes.Luck), Is.True);
+        Assert.That(item.ItemOptions.Any(link => link.ItemOption?.OptionType == ItemOptionTypes.Wing), Is.True);
+    }
+
     private MonsterDefinition GetMonster(int numberOfDrops, byte level)
     {
         var monster = new Mock<MonsterDefinition>();
@@ -139,6 +175,15 @@ public class DropGeneratorTest
         return randomizer.Object;
     }
 
+    private IRandomizer GetMinimumRandomizer()
+    {
+        var randomizer = new Mock<IRandomizer>();
+        randomizer.Setup(r => r.NextInt(It.IsAny<int>(), It.IsAny<int>()))
+            .Returns((int minimum, int _) => minimum);
+        randomizer.Setup(r => r.NextDouble()).Returns(0);
+        return randomizer.Object;
+    }
+
     private GameConfiguration GetGameConfig()
     {
         var gameConfiguration = new Mock<GameConfiguration>();
@@ -157,5 +202,41 @@ public class DropGeneratorTest
         itemDefinition.Object.Durability = 1;
         itemDefinition.Setup(d => d.PossibleItemOptions).Returns(new List<ItemOptionDefinition>());
         return itemDefinition.Object;
+    }
+
+    private ItemDefinition CreateWingDefinition()
+    {
+        var wing = this.CreateItemDefinition(12, 3, 100);
+        wing.MaximumItemLevel = 15;
+
+        var luck = new Mock<IncreasableItemOption>();
+        luck.SetupAllProperties();
+        luck.Object.OptionType = ItemOptionTypes.Luck;
+        luck.Setup(option => option.LevelDependentOptions).Returns(new List<ItemOptionOfLevel>());
+        var wingStat = new Mock<IncreasableItemOption>();
+        wingStat.SetupAllProperties();
+        wingStat.Object.OptionType = ItemOptionTypes.Wing;
+        wingStat.Setup(option => option.LevelDependentOptions).Returns(new List<ItemOptionOfLevel>());
+
+        var luckDefinition = new Mock<ItemOptionDefinition>();
+        luckDefinition.SetupAllProperties();
+        luckDefinition.Setup(definition => definition.PossibleOptions).Returns(new List<IncreasableItemOption> { luck.Object });
+        var statDefinition = new Mock<ItemOptionDefinition>();
+        statDefinition.SetupAllProperties();
+        statDefinition.Setup(definition => definition.PossibleOptions).Returns(new List<IncreasableItemOption> { wingStat.Object });
+        Mock.Get(wing).Setup(definition => definition.PossibleItemOptions)
+            .Returns(new List<ItemOptionDefinition> { luckDefinition.Object, statDefinition.Object });
+        return wing;
+    }
+
+    private ItemDropItemGroup CreateWingDropGroup(SpecialItemType itemType, ItemDefinition wing, byte minimumLevel, byte maximumLevel)
+    {
+        var group = new Mock<ItemDropItemGroup>();
+        group.SetupAllProperties();
+        group.Object.ItemType = itemType;
+        group.Object.MinimumLevel = minimumLevel;
+        group.Object.MaximumLevel = maximumLevel;
+        group.Setup(dropGroup => dropGroup.PossibleItems).Returns(new List<ItemDefinition> { wing });
+        return group.Object;
     }
 }

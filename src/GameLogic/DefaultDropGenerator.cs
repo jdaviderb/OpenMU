@@ -359,6 +359,8 @@ public class DefaultDropGenerator : IDropGenerator
         {
             SpecialItemType.Ancient => this.GenerateRandomAncient(),
             SpecialItemType.Excellent => this.GenerateRandomExcellentItem(possibleItems: possibleItems),
+            SpecialItemType.WingWithoutOptions => this.GenerateWing(possibleItems, false),
+            SpecialItemType.WingWithGoodOptions => this.GenerateWing(possibleItems, true),
             _ => this.GenerateRandomItem(possibleItems),
         };
 
@@ -434,6 +436,63 @@ public class DefaultDropGenerator : IDropGenerator
         this.ApplyRandomOptions(item);
 
         return item;
+    }
+
+    private Item? GenerateWing(ICollection<ItemDefinition>? possibleItems, bool withGoodOptions)
+    {
+        if (possibleItems is null || possibleItems.Count == 0)
+        {
+            return null;
+        }
+
+        var item = new TemporaryItem
+        {
+            Definition = possibleItems.ElementAt(this._randomizer.NextInt(0, possibleItems.Count)),
+        };
+
+        if (!withGoodOptions)
+        {
+            return item;
+        }
+
+        var luckDefinition = item.Definition.PossibleItemOptions.FirstOrDefault(
+            definition => definition.PossibleOptions.Any(option => option.OptionType == ItemOptionTypes.Luck));
+        if (luckDefinition is not null)
+        {
+            this.ApplyGuaranteedOption(item, luckDefinition, ItemOptionTypes.Luck);
+        }
+
+        var statDefinitions = item.Definition.PossibleItemOptions
+            .Where(definition => definition.PossibleOptions.Any(option => option.OptionType != ItemOptionTypes.Luck))
+            .ToList();
+        var statDefinition = statDefinitions.SelectRandom(this._randomizer);
+        if (statDefinition is not null)
+        {
+            this.ApplyGuaranteedOption(item, statDefinition, null);
+        }
+
+        return item;
+    }
+
+    private void ApplyGuaranteedOption(Item item, ItemOptionDefinition definition, ItemOptionType? requiredType)
+    {
+        var possibleOptions = definition.PossibleOptions
+            .Where(option => requiredType is null || option.OptionType == requiredType)
+            .Where(option => item.ItemOptions.All(link => link.ItemOption != option))
+            .ToList();
+        var option = possibleOptions.SelectRandom(this._randomizer);
+        if (option is null)
+        {
+            return;
+        }
+
+        var optionLevel = option.LevelDependentOptions
+            .Select(levelOption => levelOption.Level)
+            .Concat(option.LevelDependentOptions.Count > 0 ? [1] : [])
+            .Where(level => level <= this._maxItemOptionLevelDrop)
+            .DefaultIfEmpty(0)
+            .Max();
+        item.ItemOptions.Add(new ItemOptionLink { ItemOption = option, Level = optionLevel });
     }
 
     private void ApplyRandomAncientOption(Item item)

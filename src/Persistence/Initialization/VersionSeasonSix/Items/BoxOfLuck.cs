@@ -346,17 +346,27 @@ internal class BoxOfLuck : InitializerBase
         this.AddArmorSet(goldMedal, 59); // Sacred Fire Set
         this.AddMoneyDropFallback(box, 100000, goldMedal);
 
-        var boxOfHeaven = this.Context.CreateNew<ItemDropItemGroup>();
-        boxOfHeaven.ItemType = SpecialItemType.RandomItem;
-        boxOfHeaven.SourceItemLevel = 7;
-        boxOfHeaven.Chance = 0.5;
-        boxOfHeaven.Description = "Box of Heaven";
-        boxOfHeaven.DropEffect = ItemDropEffect.FanfareSound;
-        box.DropItems.Add(boxOfHeaven);
-        this.AddDropItem(boxOfHeaven, 12, 15); // Jewel of Chaos
-        this.AddDropItem(boxOfHeaven, 14, 13); // Jewel of Bless
-        this.AddDropItem(boxOfHeaven, 14, 14); // Jewel of Soul
-        this.AddMoneyDropFallback(box, 1000, boxOfHeaven);
+        var normalWingBox = this.Context.CreateNew<ItemDropItemGroup>();
+        normalWingBox.ItemType = SpecialItemType.WingWithoutOptions;
+        normalWingBox.SourceItemLevel = 7;
+        normalWingBox.Chance = 0.6;
+        normalWingBox.MinimumLevel = 0;
+        normalWingBox.MaximumLevel = 7;
+        normalWingBox.Description = "Box of Wing - normal S1/S2/S3 wing";
+        normalWingBox.DropEffect = ItemDropEffect.FanfareSound;
+        box.DropItems.Add(normalWingBox);
+        this.AddWingPool(normalWingBox);
+
+        var premiumWingBox = this.Context.CreateNew<ItemDropItemGroup>();
+        premiumWingBox.ItemType = SpecialItemType.WingWithGoodOptions;
+        premiumWingBox.SourceItemLevel = 7;
+        premiumWingBox.Chance = 0.4;
+        premiumWingBox.MinimumLevel = 9;
+        premiumWingBox.MaximumLevel = 13;
+        premiumWingBox.Description = "Box of Wing - premium S1/S2/S3 wing";
+        premiumWingBox.DropEffect = ItemDropEffect.FanfareSound;
+        box.DropItems.Add(premiumWingBox);
+        this.AddWingPool(premiumWingBox);
 
         var boxOfKundun1 = this.Context.CreateNew<ItemDropItemGroup>();
         boxOfKundun1.SourceItemLevel = 8;
@@ -601,6 +611,17 @@ internal class BoxOfLuck : InitializerBase
         this.AddArmorSet(heartOfDarkLord, 12); // Wind Set
         this.AddArmorSet(heartOfDarkLord, 25); // Light Plate Set
         this.AddMoneyDropFallback(box, 10000, heartOfDarkLord);
+    }
+
+    private void AddWingPool(ItemDropItemGroup group)
+    {
+        byte[] group12Wings = [0, 1, 2, 3, 4, 5, 6, 36, 37, 38, 39, 40, 41, 42, 43, 49, 50];
+        foreach (var wingNumber in group12Wings)
+        {
+            this.AddDropItem(group, 12, wingNumber);
+        }
+
+        this.AddDropItem(group, 13, 30); // Cape of Lord
     }
 
     private void CreatePinkChocolateBox()
