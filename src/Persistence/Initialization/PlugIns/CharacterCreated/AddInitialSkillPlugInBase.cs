@@ -32,7 +32,11 @@ public class AddInitialSkillPlugInBase : ICharacterCreatedPlugIn
     public void CharacterCreated(Player player, Character createdCharacter)
     {
         using var logScope = player.Logger.BeginScope(this.GetType());
-        if (this._characterClassNumber != createdCharacter.CharacterClass?.Number)
+        var expectedClass = player.GameContext.Configuration.CharacterClasses
+            .FirstOrDefault(characterClass => characterClass.Number == this._characterClassNumber);
+        if (createdCharacter.CharacterClass is not { } actualClass
+            || expectedClass is null
+            || !IsClassOrEvolution(expectedClass, actualClass))
         {
             player.Logger.LogDebug("Wrong character class {0}, expected {1}", createdCharacter.CharacterClass?.Number, this._characterClassNumber);
             return;
@@ -46,9 +50,9 @@ public class AddInitialSkillPlugInBase : ICharacterCreatedPlugIn
             return;
         }
 
-        if (!skillDefinition.QualifiedCharacters.Contains(createdCharacter.CharacterClass))
+        if (!skillDefinition.QualifiedCharacters.Contains(actualClass))
         {
-            player.Logger.LogError($"Skill {skillDefinition.Name} is not available for character class {createdCharacter.CharacterClass.Name}.");
+            player.Logger.LogError($"Skill {skillDefinition.Name} is not available for character class {actualClass.Name}.");
             return;
         }
 
@@ -61,5 +65,19 @@ public class AddInitialSkillPlugInBase : ICharacterCreatedPlugIn
         var skillEntry = player.PersistenceContext.CreateNew<SkillEntry>();
         skillEntry.Skill = skillDefinition;
         createdCharacter.LearnedSkills.Add(skillEntry);
+    }
+
+    private static bool IsClassOrEvolution(CharacterClass expectedClass, CharacterClass? actualClass)
+    {
+        var visitedClasses = new HashSet<CharacterClass>();
+        for (var characterClass = expectedClass; characterClass is not null && visitedClasses.Add(characterClass); characterClass = characterClass.NextGenerationClass)
+        {
+            if (characterClass == actualClass)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

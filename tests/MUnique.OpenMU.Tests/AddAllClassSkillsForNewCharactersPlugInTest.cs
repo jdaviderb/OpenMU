@@ -17,20 +17,27 @@ using MUnique.OpenMU.Persistence.Initialization.PlugIns.CharacterCreated;
 public class AddAllClassSkillsForNewCharactersPlugInTest
 {
     /// <summary>
-    /// Verifies that only matching non-master skills are assigned and duplicates are ignored.
+    /// Verifies final evolution, matching non-master skill assignment and duplicate protection.
     /// </summary>
     [Test]
     public async Task AssignsMatchingNonMasterSkillsWithoutDuplicatesAsync()
     {
         var player = await PlayerTestHelper.CreatePlayerAsync().ConfigureAwait(false);
-        var characterClass = player.SelectedCharacter!.CharacterClass!;
+        var baseClass = new Mock<CharacterClass>();
+        baseClass.SetupAllProperties();
+        var secondClass = new Mock<CharacterClass>();
+        secondClass.SetupAllProperties();
+        var finalClass = new Mock<CharacterClass>();
+        finalClass.SetupAllProperties();
+        baseClass.Object.NextGenerationClass = secondClass.Object;
+        secondClass.Object.NextGenerationClass = finalClass.Object;
         var otherClass = new Mock<CharacterClass>().Object;
 
-        var matchingSkill = CreateSkill(1, characterClass);
-        var secondMatchingSkill = CreateSkill(2, characterClass);
+        var matchingSkill = CreateSkill(1, finalClass.Object);
+        var secondMatchingSkill = CreateSkill(2, finalClass.Object);
         var otherClassSkill = CreateSkill(3, otherClass);
-        var masterSkill = CreateSkill(4, characterClass, new Mock<MasterSkillDefinition>().Object);
-        var eventOnlySkill = CreateSkill(213, characterClass);
+        var masterSkill = CreateSkill(4, finalClass.Object, new Mock<MasterSkillDefinition>().Object);
+        var eventOnlySkill = CreateSkill(213, finalClass.Object);
         player.GameContext.Configuration.Skills.Add(matchingSkill);
         player.GameContext.Configuration.Skills.Add(secondMatchingSkill);
         player.GameContext.Configuration.Skills.Add(otherClassSkill);
@@ -47,12 +54,13 @@ public class AddAllClassSkillsForNewCharactersPlugInTest
         {
             new() { Skill = matchingSkill },
         });
-        character.Object.CharacterClass = characterClass;
+        character.Object.CharacterClass = baseClass.Object;
 
         var plugIn = new AddAllClassSkillsForNewCharactersPlugIn();
         plugIn.CharacterCreated(player, character.Object);
         plugIn.CharacterCreated(player, character.Object);
 
+        Assert.That(character.Object.CharacterClass, Is.SameAs(finalClass.Object));
         Assert.That(character.Object.LearnedSkills.Select(entry => entry.Skill?.Number), Is.EquivalentTo(new short[] { 1, 2 }));
     }
 

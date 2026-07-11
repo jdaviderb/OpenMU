@@ -42,7 +42,10 @@ public class AddInitialItemPlugInBase : ICharacterCreatedPlugIn
     public void CharacterCreated(Player player, Character createdCharacter)
     {
         using var logScope = player.Logger.BeginScope(this.GetType());
-        if (this._characterClassNumber.HasValue && this._characterClassNumber != createdCharacter.CharacterClass?.Number)
+        var expectedClass = this._characterClassNumber.HasValue
+            ? player.GameContext.Configuration.CharacterClasses.FirstOrDefault(characterClass => characterClass.Number == this._characterClassNumber)
+            : null;
+        if (this._characterClassNumber.HasValue && (expectedClass is null || !IsClassOrEvolution(expectedClass, createdCharacter.CharacterClass)))
         {
             player.Logger.LogDebug("Wrong character class {0}, expected {1}", createdCharacter.CharacterClass?.Number, this._characterClassNumber);
             return;
@@ -84,5 +87,19 @@ public class AddInitialItemPlugInBase : ICharacterCreatedPlugIn
 
         player.Logger.LogWarning($"Unknown item, group {this._itemGroup}, number {this._itemNumber}.");
         return null;
+    }
+
+    private static bool IsClassOrEvolution(CharacterClass expectedClass, CharacterClass? actualClass)
+    {
+        var visitedClasses = new HashSet<CharacterClass>();
+        for (var characterClass = expectedClass; characterClass is not null && visitedClasses.Add(characterClass); characterClass = characterClass.NextGenerationClass)
+        {
+            if (characterClass == actualClass)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

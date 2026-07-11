@@ -13,7 +13,7 @@ using MUnique.OpenMU.GameLogic.PlugIns;
 using MUnique.OpenMU.PlugIns;
 
 /// <summary>
-/// Assigns every learnable non-master skill which is available to a newly created character's class.
+/// Promotes a newly created character to its final evolution and assigns every learnable non-master skill.
 /// </summary>
 /// <remarks>
 /// Skill requirements still apply when the character tries to use a skill. Master skills are
@@ -22,19 +22,22 @@ using MUnique.OpenMU.PlugIns;
 [Guid("16F89612-A63A-4A51-81A7-F3C30223D6AB")]
 [PlugIn]
 [Display(
-    Name = "Learn all class skills for new characters",
-    Description = "Automatically assigns all scroll/orb skills supported by the selected class when a character is created.")]
+    Name = "Final evolution and all class skills for new characters",
+    Description = "Promotes new characters to their final class and assigns all supported scroll/orb skills.")]
 public class AddAllClassSkillsForNewCharactersPlugIn : ICharacterCreatedPlugIn
 {
     /// <inheritdoc />
     public void CharacterCreated(Player player, Character createdCharacter)
     {
         using var logScope = player.Logger.BeginScope(this.GetType());
-        if (createdCharacter.CharacterClass is not { } characterClass)
+        if (createdCharacter.CharacterClass is not { } originalClass)
         {
             player.Logger.LogError("The new character has no character class, so skills cannot be assigned.");
             return;
         }
+
+        var characterClass = GetFinalEvolution(originalClass, player.Logger);
+        createdCharacter.CharacterClass = characterClass;
 
         var learnedSkillNumbers = createdCharacter.LearnedSkills
             .Where(entry => entry.Skill is not null)
@@ -59,10 +62,29 @@ public class AddAllClassSkillsForNewCharactersPlugIn : ICharacterCreatedPlugIn
         }
 
         player.Logger.LogInformation(
-            "Assigned {SkillCount} class skills to new {CharacterClass} character {CharacterName}.",
-            skillsToLearn.Count,
+            "Promoted new character {CharacterName} from {OriginalClass} to {CharacterClass} and assigned {SkillCount} class skills.",
+            createdCharacter.Name,
+            originalClass.Name,
             characterClass.Name,
-            createdCharacter.Name);
+            skillsToLearn.Count);
+    }
+
+    private static CharacterClass GetFinalEvolution(CharacterClass originalClass, ILogger logger)
+    {
+        var visitedClasses = new HashSet<CharacterClass>();
+        var characterClass = originalClass;
+        while (characterClass.NextGenerationClass is { } nextClass)
+        {
+            if (!visitedClasses.Add(characterClass))
+            {
+                logger.LogError("Detected a cycle in the evolution chain of character class {CharacterClass}.", originalClass.Name);
+                break;
+            }
+
+            characterClass = nextClass;
+        }
+
+        return characterClass;
     }
 
     private static HashSet<short> GetLearnableSkillNumbers(IEnumerable<ItemDefinition> itemDefinitions)
