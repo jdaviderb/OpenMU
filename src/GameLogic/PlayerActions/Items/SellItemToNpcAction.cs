@@ -13,7 +13,17 @@ using MUnique.OpenMU.GameLogic.Views.Inventory;
 /// </summary>
 public class SellItemToNpcAction
 {
+    private static readonly int MaximumNpcSellingPrice = ReadMaximumNpcSellingPrice();
+
     private readonly ItemPriceCalculator _itemPriceCalculator;
+
+    private static int ReadMaximumNpcSellingPrice()
+    {
+        return int.TryParse(Environment.GetEnvironmentVariable("MUMAIN_MAX_NPC_SELL_PRICE"), out var configuredCap)
+            && configuredCap > 0
+            ? configuredCap
+            : int.MaxValue;
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SellItemToNpcAction"/> class.
@@ -57,8 +67,13 @@ public class SellItemToNpcAction
 
     private async ValueTask SellItemAsync(Player player, Item item)
     {
-        var sellingPrice = (int)this._itemPriceCalculator.CalculateSellingPrice(item, item.Durability());
-        player.Logger.LogDebug("Calculated selling price {0} for item {1}", sellingPrice, item);
+        var calculatedPrice = this._itemPriceCalculator.CalculateSellingPrice(item, item.Durability());
+        var sellingPrice = (int)Math.Min(calculatedPrice, MaximumNpcSellingPrice);
+        player.Logger.LogDebug(
+            "Calculated selling price {0}, capped to {1} for item {2}",
+            calculatedPrice,
+            sellingPrice,
+            item);
         if (player.TryAddMoney(sellingPrice))
         {
             player.Logger.LogDebug("Sold Item {0} for price: {1}", item, sellingPrice);
