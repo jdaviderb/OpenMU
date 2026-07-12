@@ -421,7 +421,7 @@
     <value>Can't start with less than {0} players.</value>
   </data>
   <data name="TalkingNotImplementedFormat" xml:space="preserve">
-    <value>Talking to this NPC ({0}, {1}) is not implemented yet.</value>
+    <value>Hello! I'm {1}. Stay safe out there, warrior.</value>
   </data>
   <data name="BloodCastleCrystalStatusDestroyed" xml:space="preserve">
     <value>{0} has destroyed the Crystal Statue!</value>
