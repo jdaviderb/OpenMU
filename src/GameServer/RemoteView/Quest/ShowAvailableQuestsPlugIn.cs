@@ -39,6 +39,20 @@ public class ShowAvailableQuestsPlugIn : IShowAvailableQuestsPlugIn
             return;
         }
 
+        var activeQuest = this._player.OpenedNpc.Definition.Quests
+            .Select(quest => this._player.GetQuestState(quest.Group)?.ActiveQuest)
+            .FirstOrDefault(quest => quest is not null);
+        if (activeQuest is not null)
+        {
+            // This Season 6 client requires the extended C2/F6:0C packet. The legacy
+            // C1 form has a different payload layout and corrupts the quest UI when
+            // an active or completed quest is opened again.
+            await new QuestProgressExtendedPlugIn(this._player)
+                .ShowQuestProgressAsync(activeQuest, false)
+                .ConfigureAwait(false);
+            return;
+        }
+
         var totalQuests = this._player.GetAvailableQuestsOfOpenedNpc().ToList();
         var questCount = totalQuests.Count;
         int Write()
