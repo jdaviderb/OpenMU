@@ -46,6 +46,7 @@ The characters enters the game world.
 | 84 | 2 | ShortLittleEndian |  | MagicSpeed |
 | 86 | 2 | ShortLittleEndian |  | MaximumAttackSpeed |
 | 88 | 1 | Byte |  | InventoryExtensions |
+| 89 | 2 | ShortLittleEndian |  | Resets |
 
 ### CharacterHeroState Enum
 
