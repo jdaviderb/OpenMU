@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using MUnique.OpenMU.DataModel.Configuration.Items;
 using MUnique.OpenMU.DataModel.Entities;
 using MUnique.OpenMU.GameLogic;
 using MUnique.OpenMU.GameLogic.Views.Inventory;
@@ -214,7 +215,8 @@ public sealed class LiveRewardController : ControllerBase
         return request.Rewards.All(reward => reward.Quantity is > 0 and <= MaximumItemCount
                                              && reward.Group is >= 0 and <= 31
                                              && reward.Number is >= 0 and <= 511
-                                             && reward.Level is >= 0 and <= 15)
+                                             && reward.Level is >= 0 and <= 15
+                                             && IsValidVariant(reward))
                && request.Rewards.Sum(reward => reward.Quantity) <= MaximumItemCount;
     }
 
@@ -225,6 +227,25 @@ public sealed class LiveRewardController : ControllerBase
                && string.Equals(request.Rewards[0].Type, "item", StringComparison.OrdinalIgnoreCase)
                && request.Rewards[0].Quantity == 1
                && HasValidItemRewards(request);
+    }
+
+    private static bool IsValidVariant(LiveGiftRewardLine reward)
+    {
+        return string.IsNullOrWhiteSpace(reward.Variant)
+               || (reward.Group == 13
+                   && reward.Number == 37
+                   && GetVariantOptionType(reward.Variant) is not null);
+    }
+
+    private static ItemOptionType? GetVariantOptionType(string? variant)
+    {
+        return variant?.Trim().ToLowerInvariant() switch
+        {
+            "fenrir-black" => ItemOptionTypes.BlackFenrir,
+            "fenrir-blue" => ItemOptionTypes.BlueFenrir,
+            "fenrir-gold" => ItemOptionTypes.GoldFenrir,
+            _ => null,
+        };
     }
 
     private static bool MatchesPlayer(Player player, LiveGiftRewardRequest request)
@@ -247,7 +268,7 @@ public sealed class LiveRewardController : ControllerBase
     private async Task<IActionResult> DeliverItemsAsync(Player player, LiveGiftRewardRequest request, string itemIdDomain, CancellationToken cancellationToken)
     {
         var inventory = player.Inventory!;
-        var requestedItems = new List<(Guid Id, LiveGiftRewardLine Reward, DataModel.Configuration.Items.ItemDefinition Definition)>();
+        var requestedItems = new List<(Guid Id, LiveGiftRewardLine Reward, ItemDefinition Definition, IncreasableItemOption? VariantOption)>();
         var itemIndex = 0;
         foreach (var reward in request.Rewards)
         {
@@ -263,9 +284,21 @@ public sealed class LiveRewardController : ControllerBase
                 return this.UnprocessableEntity(new { error = "item_level_invalid" });
             }
 
+            IncreasableItemOption? variantOption = null;
+            if (GetVariantOptionType(reward.Variant) is { } optionType)
+            {
+                variantOption = definition.PossibleItemOptions
+                    .SelectMany(option => option.PossibleOptions)
+                    .FirstOrDefault(option => option.OptionType == optionType);
+                if (variantOption is null)
+                {
+                    return this.UnprocessableEntity(new { error = "item_variant_not_found" });
+                }
+            }
+
             for (var quantityIndex = 0; quantityIndex < reward.Quantity; quantityIndex++)
             {
-                requestedItems.Add((GetRewardItemId(itemIdDomain, request.RedemptionId, itemIndex++), reward, definition));
+                requestedItems.Add((GetRewardItemId(itemIdDomain, request.RedemptionId, itemIndex++), reward, definition, variantOption));
             }
         }
 
@@ -287,7 +320,9 @@ public sealed class LiveRewardController : ControllerBase
                 && (existing.Definition is null
                     || existing.Definition.Group != expected.Definition.Group
                     || existing.Definition.Number != expected.Definition.Number
-                    || existing.Level != expected.Reward.Level))
+                    || existing.Level != expected.Reward.Level
+                    || (expected.VariantOption is not null
+                        && !existing.ItemOptions.Any(link => link.ItemOption == expected.VariantOption))))
             {
                 return this.Conflict(new { error = "reward_identity_mismatch" });
             }
@@ -320,6 +355,13 @@ public sealed class LiveRewardController : ControllerBase
 
                 var item = temporaryItem.MakePersistent(player.PersistenceContext);
                 ((Persistence.IIdentifiable)item).Id = expected.Id;
+                if (expected.VariantOption is not null)
+                {
+                    var optionLink = player.PersistenceContext.CreateNew<ItemOptionLink>();
+                    optionLink.ItemOption = expected.VariantOption;
+                    item.ItemOptions.Add(optionLink);
+                }
+
                 if (!await inventory.AddItemAsync(slot.Value, item).ConfigureAwait(false))
                 {
                     player.PersistenceContext.Detach(item);
@@ -416,6 +458,15 @@ public sealed class LiveRewardController : ControllerBase
             canonicalLines.Add(GetLiveRewardBinding(request.Rewards));
         }
 
+        var variants = request.Rewards
+            .Select(reward => reward.Variant?.Trim().ToLowerInvariant() ?? string.Empty)
+            .ToArray();
+        if (variants.Any(variant => variant.Length > 0))
+        {
+            // Optional for rolling compatibility with existing rewards, mandatory whenever a variant is present.
+            canonicalLines.Add($"variants:{string.Join(';', variants)}");
+        }
+
         var canonical = string.Join('\n', canonicalLines);
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(this._apiKey));
         var expectedBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical));
@@ -479,4 +530,6 @@ public sealed class LiveGiftRewardLine
     public int Level { get; init; }
 
     public int Quantity { get; init; }
+
+    public string? Variant { get; init; }
 }
