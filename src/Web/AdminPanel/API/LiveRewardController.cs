@@ -27,7 +27,9 @@ public sealed class LiveRewardController : ControllerBase
     private const string SignatureHeader = "X-Mu-Gateway-Signature";
     private const string TimestampHeader = "X-Mu-Gateway-Timestamp";
     private const string SignedMethod = "POST";
-    private const string SignedPath = "/api/internal/live-rewards/gift-code";
+    private const string GiftSignedPath = "/api/internal/live-rewards/gift-code";
+    private const string ShopCheckSignedPath = "/api/internal/live-rewards/shop-purchase/check";
+    private const string ShopDeliverSignedPath = "/api/internal/live-rewards/shop-purchase";
     private const long MaximumClockSkewSeconds = 120;
     private const int MaximumItemCount = 32;
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> CharacterLocks = new();
@@ -49,7 +51,7 @@ public sealed class LiveRewardController : ControllerBase
     [HttpPost("gift-code")]
     public async Task<IActionResult> DeliverGiftCodeAsync([FromBody] LiveGiftRewardRequest request, CancellationToken cancellationToken)
     {
-        if (!this.IsAuthorized(request))
+        if (!this.IsAuthorized(request, "v1", GiftSignedPath, bindRewardLines: false))
         {
             return this.Unauthorized(new { error = "unauthorized" });
         }
@@ -86,7 +88,109 @@ public sealed class LiveRewardController : ControllerBase
                 return this.Conflict(new { error = "character_offline" });
             }
 
-            return await this.DeliverItemsAsync(player, request, cancellationToken).ConfigureAwait(false);
+            return await this.DeliverItemsAsync(player, request, "mumain-live-gift-v1", cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            characterLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Checks that a selected online character can receive the one item frozen in a shop purchase.
+    /// This never reserves a slot; the delivery endpoint re-checks after payment and remains idempotent.
+    /// </summary>
+    [HttpPost("shop-purchase/check")]
+    public async Task<IActionResult> CheckShopPurchaseAsync([FromBody] LiveGiftRewardRequest request, CancellationToken cancellationToken)
+    {
+        if (!this.IsAuthorized(request, "v2", ShopCheckSignedPath, bindRewardLines: true))
+        {
+            return this.Unauthorized(new { error = "unauthorized" });
+        }
+
+        if (!HasValidShopRequest(request))
+        {
+            return this.BadRequest(new { error = "invalid_reward_request" });
+        }
+
+        var player = await this.FindPlayerAsync(request).ConfigureAwait(false);
+        if (player?.Inventory is null || player.SelectedCharacter is null)
+        {
+            return this.Conflict(new { error = "character_offline" });
+        }
+
+        var characterLock = CharacterLocks.GetOrAdd(request.CharacterId, _ => new SemaphoreSlim(1, 1));
+        await characterLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!MatchesPlayer(player, request) || player.Inventory is null)
+            {
+                return this.Conflict(new { error = "character_offline" });
+            }
+
+            var reward = request.Rewards[0];
+            var definition = player.GameContext.Configuration.Items
+                .FirstOrDefault(item => item.Group == reward.Group && item.Number == reward.Number);
+            if (definition is null)
+            {
+                return this.UnprocessableEntity(new { error = "item_not_found" });
+            }
+
+            if (reward.Level > definition.MaximumItemLevel)
+            {
+                return this.UnprocessableEntity(new { error = "item_level_invalid" });
+            }
+
+            var temporaryItem = new TemporaryItem
+            {
+                Definition = definition,
+                Durability = definition.Durability,
+                HasSkill = definition.Skill is not null,
+                Level = (byte)reward.Level,
+                SocketCount = 0,
+            };
+            return player.Inventory.CheckInvSpace(temporaryItem) is null
+                ? this.Conflict(new { error = "inventory_full" })
+                : this.Ok(new { ok = true, inventorySpace = true });
+        }
+        finally
+        {
+            characterLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Delivers a paid shop item. The purchase UUID deterministically identifies the physical item.
+    /// </summary>
+    [HttpPost("shop-purchase")]
+    public async Task<IActionResult> DeliverShopPurchaseAsync([FromBody] LiveGiftRewardRequest request, CancellationToken cancellationToken)
+    {
+        if (!this.IsAuthorized(request, "v2", ShopDeliverSignedPath, bindRewardLines: true))
+        {
+            return this.Unauthorized(new { error = "unauthorized" });
+        }
+
+        if (!HasValidShopRequest(request))
+        {
+            return this.BadRequest(new { error = "invalid_reward_request" });
+        }
+
+        var player = await this.FindPlayerAsync(request).ConfigureAwait(false);
+        if (player?.Inventory is null || player.SelectedCharacter is null)
+        {
+            return this.Conflict(new { error = "character_offline" });
+        }
+
+        var characterLock = CharacterLocks.GetOrAdd(request.CharacterId, _ => new SemaphoreSlim(1, 1));
+        await characterLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!MatchesPlayer(player, request) || player.Inventory is null)
+            {
+                return this.Conflict(new { error = "character_offline" });
+            }
+
+            return await this.DeliverItemsAsync(player, request, "mumain-live-shop-v1", cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -100,9 +204,9 @@ public sealed class LiveRewardController : ControllerBase
                && request.OpenMuAccountId != Guid.Empty
                && request.CharacterId != Guid.Empty
                && !string.IsNullOrWhiteSpace(request.CharacterName)
-               && request.RewardHash.Length == 64
+               && request.RewardHash is { Length: 64 }
                && request.RewardHash.All(Uri.IsHexDigit)
-               && request.Rewards.Count is > 0 and <= 24;
+               && request.Rewards is { Count: > 0 and <= 24 };
     }
 
     private static bool HasValidItemRewards(LiveGiftRewardRequest request)
@@ -114,6 +218,15 @@ public sealed class LiveRewardController : ControllerBase
                && request.Rewards.Sum(reward => reward.Quantity) <= MaximumItemCount;
     }
 
+    private static bool HasValidShopRequest(LiveGiftRewardRequest request)
+    {
+        return HasValidEnvelope(request)
+               && request.Rewards.Count == 1
+               && string.Equals(request.Rewards[0].Type, "item", StringComparison.OrdinalIgnoreCase)
+               && request.Rewards[0].Quantity == 1
+               && HasValidItemRewards(request);
+    }
+
     private static bool MatchesPlayer(Player player, LiveGiftRewardRequest request)
     {
         return player.Account?.GetId() == request.OpenMuAccountId
@@ -121,9 +234,9 @@ public sealed class LiveRewardController : ControllerBase
                && string.Equals(player.Name, request.CharacterName, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static Guid GetRewardItemId(Guid redemptionId, int itemIndex)
+    private static Guid GetRewardItemId(string domain, Guid redemptionId, int itemIndex)
     {
-        var source = Encoding.UTF8.GetBytes($"mumain-live-gift-v1:{redemptionId:D}:{itemIndex}");
+        var source = Encoding.UTF8.GetBytes($"{domain}:{redemptionId:D}:{itemIndex}");
         var hash = SHA256.HashData(source);
         hash[6] = (byte)((hash[6] & 0x0F) | 0x50); // UUID version 5 marker (name-derived).
         hash[8] = (byte)((hash[8] & 0x3F) | 0x80);
@@ -131,8 +244,9 @@ public sealed class LiveRewardController : ControllerBase
         return Guid.ParseExact($"{hex[..8]}-{hex[8..12]}-{hex[12..16]}-{hex[16..20]}-{hex[20..32]}", "D");
     }
 
-    private async Task<IActionResult> DeliverItemsAsync(Player player, LiveGiftRewardRequest request, CancellationToken cancellationToken)
+    private async Task<IActionResult> DeliverItemsAsync(Player player, LiveGiftRewardRequest request, string itemIdDomain, CancellationToken cancellationToken)
     {
+        var inventory = player.Inventory!;
         var requestedItems = new List<(Guid Id, LiveGiftRewardLine Reward, DataModel.Configuration.Items.ItemDefinition Definition)>();
         var itemIndex = 0;
         foreach (var reward in request.Rewards)
@@ -151,17 +265,29 @@ public sealed class LiveRewardController : ControllerBase
 
             for (var quantityIndex = 0; quantityIndex < reward.Quantity; quantityIndex++)
             {
-                requestedItems.Add((GetRewardItemId(request.RedemptionId, itemIndex++), reward, definition));
+                requestedItems.Add((GetRewardItemId(itemIdDomain, request.RedemptionId, itemIndex++), reward, definition));
             }
         }
 
-        var existingItems = player.Inventory!.Items
-            .Where(item => item is Persistence.IIdentifiable identifiable && requestedItems.Any(expected => expected.Id == identifiable.Id))
-            .ToDictionary(item => item.GetId());
+        // Resolve deterministic reward IDs globally through persistence, not only in the
+        // current inventory. Moving a delivered item to vault/trade before an HTTP retry
+        // must still count as already applied and can never mint a duplicate.
+        var existingItems = new Dictionary<Guid, Item>();
+        foreach (var expected in requestedItems)
+        {
+            if (await player.PersistenceContext.GetByIdAsync<Item>(expected.Id, cancellationToken).ConfigureAwait(false) is { } existing)
+            {
+                existingItems[expected.Id] = existing;
+            }
+        }
+
         foreach (var expected in requestedItems)
         {
             if (existingItems.TryGetValue(expected.Id, out var existing)
-                && (existing.Definition != expected.Definition || existing.Level != expected.Reward.Level))
+                && (existing.Definition is null
+                    || existing.Definition.Group != expected.Definition.Group
+                    || existing.Definition.Number != expected.Definition.Number
+                    || existing.Level != expected.Reward.Level))
             {
                 return this.Conflict(new { error = "reward_identity_mismatch" });
             }
@@ -185,7 +311,7 @@ public sealed class LiveRewardController : ControllerBase
                     Level = (byte)expected.Reward.Level,
                     SocketCount = 0,
                 };
-                var slot = player.Inventory.CheckInvSpace(temporaryItem);
+                var slot = inventory.CheckInvSpace(temporaryItem);
                 if (slot is null)
                 {
                     await RollBackAddedItemsAsync(player, addedItems).ConfigureAwait(false);
@@ -194,7 +320,7 @@ public sealed class LiveRewardController : ControllerBase
 
                 var item = temporaryItem.MakePersistent(player.PersistenceContext);
                 ((Persistence.IIdentifiable)item).Id = expected.Id;
-                if (!await player.Inventory.AddItemAsync(slot.Value, item).ConfigureAwait(false))
+                if (!await inventory.AddItemAsync(slot.Value, item).ConfigureAwait(false))
                 {
                     player.PersistenceContext.Detach(item);
                     await RollBackAddedItemsAsync(player, addedItems).ConfigureAwait(false);
@@ -256,7 +382,7 @@ public sealed class LiveRewardController : ControllerBase
         return null;
     }
 
-    private bool IsAuthorized(LiveGiftRewardRequest request)
+    private bool IsAuthorized(LiveGiftRewardRequest request, string version, string signedPath, bool bindRewardLines)
     {
         if (this._apiKey.Length < 32
             || !this.Request.Headers.TryGetValue(TimestampHeader, out var timestampHeader)
@@ -274,16 +400,23 @@ public sealed class LiveRewardController : ControllerBase
             return false;
         }
 
-        var canonical = string.Join(
-            '\n',
-            "v1",
+        var canonicalLines = new List<string>
+        {
+            version,
             timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture),
             SignedMethod,
-            SignedPath,
+            signedPath,
             request.RedemptionId.ToString("D").ToLowerInvariant(),
             request.OpenMuAccountId.ToString("D").ToLowerInvariant(),
             request.CharacterId.ToString("D").ToLowerInvariant(),
-            request.RewardHash.ToLowerInvariant());
+            request.RewardHash?.ToLowerInvariant() ?? string.Empty,
+        };
+        if (bindRewardLines)
+        {
+            canonicalLines.Add(GetLiveRewardBinding(request.Rewards));
+        }
+
+        var canonical = string.Join('\n', canonicalLines);
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(this._apiKey));
         var expectedBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical));
         try
@@ -296,6 +429,21 @@ public sealed class LiveRewardController : ControllerBase
         {
             return false;
         }
+    }
+
+    private static string GetLiveRewardBinding(IReadOnlyList<LiveGiftRewardLine>? rewards)
+    {
+        var lines = string.Join(
+            ';',
+            (rewards ?? []).Select(reward => string.Join(
+                ':',
+                reward.Type?.ToLowerInvariant() ?? string.Empty,
+                reward.Group.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                reward.Number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                reward.Level.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                reward.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"mumain-live-reward-v2\n{lines}")))
+            .ToLowerInvariant();
     }
 }
 
