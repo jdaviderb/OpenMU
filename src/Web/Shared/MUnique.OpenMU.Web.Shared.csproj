@@ -61,6 +61,8 @@
     <PackageReference Include="Nito.AsyncEx" />
     <PackageReference Include="SixLabors.ImageSharp" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" />
+    <!-- Override the vulnerable 8.0.2 transitive dependency pulled by the legacy MVC 2.3 package. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
 
   <ItemGroup>
