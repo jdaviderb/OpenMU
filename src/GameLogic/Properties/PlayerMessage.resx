@@ -681,6 +681,9 @@
   <data name="StatResetChatCommandDisabled" xml:space="preserve">
     <value>The /resetstats command is disabled.</value>
   </data>
+  <data name="CharacterResetChatCommandDisabled" xml:space="preserve">
+    <value>The /reset command is disabled. Use the web character menu.</value>
+  </data>
   <data name="StatsResetSuccessfully" xml:space="preserve">
     <value>Your stats have been reset. You have {0} level-up points available.</value>
   </data>

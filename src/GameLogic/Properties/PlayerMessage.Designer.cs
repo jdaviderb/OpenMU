@@ -1805,6 +1805,15 @@ namespace MUnique.OpenMU.GameLogic.Properties {
                 return ResourceManager.GetString("StatResetChatCommandDisabled", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The /reset command is disabled. Use the web character menu..
+        /// </summary>
+        public static string CharacterResetChatCommandDisabled {
+            get {
+                return ResourceManager.GetString("CharacterResetChatCommandDisabled", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Your stats have been reset. You have {0} level-up points available..
