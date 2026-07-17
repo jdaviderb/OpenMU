@@ -1257,15 +1257,15 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
         var maxMultiplier = attributes[Stats.RandomExperienceMaxMultiplier];
         if (minMultiplier > 0 && maxMultiplier > 0)
         {
-            var minimumExperience = (int)(experience * minMultiplier);
-            var maximumExperience = (int)(experience * maxMultiplier);
+            var minimumExperience = ExperienceMath.SaturateToInt32(experience * minMultiplier);
+            var maximumExperience = ExperienceMath.SaturateToInt32(experience * maxMultiplier);
             if (minimumExperience < maximumExperience)
             {
                 return Rand.NextInt(minimumExperience, maximumExperience);
             }
         }
 
-        return (int)experience;
+        return ExperienceMath.SaturateToInt32(experience);
     }
 
     /// <summary>

@@ -114,6 +114,35 @@ public class ExperienceRateSplitTest
     }
 
     /// <summary>
+    /// Verifies that a fast server rate saturates party experience instead of overflowing to a negative
+    /// value, which would make <c>AddExperienceCoreAsync</c> silently award nothing.
+    /// </summary>
+    [Test]
+    public async ValueTask PartyDistributionAt1000xDoesNotOverflowToZeroAsync()
+    {
+        var context = this.CreateGameServerContext(
+            normalExperienceRate: 1000.0f,
+            globalMasterExperienceRate: 1000.0f,
+            maximumLevel: 400,
+            maximumMasterLevel: 200);
+
+        var killer = await this.CreatePlayerAsync(context, level: 1, totalLevel: 1, isMasterClass: false).ConfigureAwait(false);
+        var member = await this.CreatePlayerAsync(context, level: 1, totalLevel: 1, isMasterClass: false).ConfigureAwait(false);
+        var party = new Party(new PartyManager(5, new NullLogger<Party>()), 5, new NullLogger<Party>());
+        await party.AddAsync(killer).ConfigureAwait(false);
+        await party.AddAsync(member).ConfigureAwait(false);
+        await killer.AddObserverAsync(member).ConfigureAwait(false);
+
+        _ = await party.DistributeExperienceAfterKillAsync(CreateKilledObject(level: 3000).Object, killer).ConfigureAwait(false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That((int)killer.Attributes![Stats.Level], Is.GreaterThan(1));
+            Assert.That((int)member.Attributes![Stats.Level], Is.GreaterThan(1));
+        });
+    }
+
+    /// <summary>
     /// Verifies that concurrent normal experience gains cannot exceed the maximum level.
     /// </summary>
     [Test]

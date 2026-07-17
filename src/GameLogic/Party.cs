@@ -364,17 +364,17 @@ public sealed class Party : AsyncDisposable
     {
         if (randomMinMultiplier <= 0 || randomMaxMultiplier <= 0)
         {
-            return (int)totalBaseExperience;
+            return ExperienceMath.SaturateToInt32(totalBaseExperience);
         }
 
-        var minimumExperience = (int)(totalBaseExperience * randomMinMultiplier);
-        var maximumExperience = (int)(totalBaseExperience * randomMaxMultiplier);
+        var minimumExperience = ExperienceMath.SaturateToInt32(totalBaseExperience * randomMinMultiplier);
+        var maximumExperience = ExperienceMath.SaturateToInt32(totalBaseExperience * randomMaxMultiplier);
         if (minimumExperience < maximumExperience)
         {
             return Rand.NextInt(minimumExperience, maximumExperience);
         }
 
-        return (int)totalBaseExperience;
+        return ExperienceMath.SaturateToInt32(totalBaseExperience);
     }
 
     private static async ValueTask AwardExperienceAsync(Player player, float perLevel, IAttackable killed)
@@ -385,19 +385,19 @@ public sealed class Party : AsyncDisposable
 
         if (isAtMaxLevel && isMasterClass)
         {
-            var exp = (int)(perLevel
-                            * attributes[Stats.TotalLevel]
-                            * player.GameContext.MasterExperienceRate
-                            * (attributes[Stats.MasterExperienceRate] + attributes[Stats.BonusExperienceRate]));
+            var exp = ExperienceMath.SaturateToInt32(perLevel
+                                                     * attributes[Stats.TotalLevel]
+                                                     * player.GameContext.MasterExperienceRate
+                                                     * (attributes[Stats.MasterExperienceRate] + attributes[Stats.BonusExperienceRate]));
 
             await player.AddMasterExperienceAsync(exp, killed).ConfigureAwait(false);
         }
         else if (!isAtMaxLevel)
         {
-            var exp = (int)(perLevel
-                            * attributes[Stats.Level]
-                            * player.GameContext.ExperienceRate
-                            * (attributes[Stats.ExperienceRate] + attributes[Stats.BonusExperienceRate]));
+            var exp = ExperienceMath.SaturateToInt32(perLevel
+                                                     * attributes[Stats.Level]
+                                                     * player.GameContext.ExperienceRate
+                                                     * (attributes[Stats.ExperienceRate] + attributes[Stats.BonusExperienceRate]));
 
             await player.AddExperienceAsync(exp, killed).ConfigureAwait(false);
         }
