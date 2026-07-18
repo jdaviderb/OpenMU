@@ -20,6 +20,11 @@ using MUnique.OpenMU.PlugIns;
 public abstract class AttackableNpcBase : NonPlayerCharacter, IAttackable
 {
     private const byte MaximumDropDistance = 2;
+    private static readonly uint MinimumMoneyDrop = uint.TryParse(
+        Environment.GetEnvironmentVariable("MUMAIN_MIN_MONEY_DROP"),
+        out var configuredMinimumMoneyDrop)
+        ? configuredMinimumMoneyDrop
+        : 0;
 
     private readonly IEventStateProvider? _eventStateProvider;
     private readonly IDropGenerator _dropGenerator;
@@ -404,7 +409,8 @@ public abstract class AttackableNpcBase : NonPlayerCharacter, IAttackable
             return;
         }
 
-        var droppedMoney = new DroppedMoney((uint)(amount * (killer.Attributes?[Stats.MoneyAmountRate] ?? 1.0f)), this.Position, this.CurrentMap);
+        var scaledAmount = (uint)(amount * (killer.Attributes?[Stats.MoneyAmountRate] ?? 1.0f));
+        var droppedMoney = new DroppedMoney(Math.Max(scaledAmount, MinimumMoneyDrop), this.Position, this.CurrentMap);
         await this.CurrentMap.AddAsync(droppedMoney).ConfigureAwait(false);
     }
 
