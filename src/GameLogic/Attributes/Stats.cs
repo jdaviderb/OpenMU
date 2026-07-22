@@ -12,9 +12,15 @@ using MUnique.OpenMU.AttributeSystem;
 public class Stats
 {
     /// <summary>
+    /// The highest base-stat value representable by the classic client's unsigned
+    /// 16-bit stat fields.
+    /// </summary>
+    public const ushort MaximumBaseStatValue = ushort.MaxValue;
+
+    /// <summary>
     /// Gets the base strength attribute definition.
     /// </summary>
-    public static AttributeDefinition BaseStrength { get; } = new(new Guid("123282FE-FEAD-448E-AD2C-BAECE939B4B1"), "Base Strength", "The base strength of the character.");
+    public static AttributeDefinition BaseStrength { get; } = new(new Guid("123282FE-FEAD-448E-AD2C-BAECE939B4B1"), "Base Strength", "The base strength of the character.") { MaximumValue = MaximumBaseStatValue };
 
     /// <summary>
     /// Gets the total strength attribute definition.
@@ -29,7 +35,7 @@ public class Stats
     /// <summary>
     /// Gets the base agility attribute definition.
     /// </summary>
-    public static AttributeDefinition BaseAgility { get; } = new(new Guid("1AE9C014-E3CD-4703-BD05-1B65F5F94CEB"), "Base Agility", "The base agility of the character.");
+    public static AttributeDefinition BaseAgility { get; } = new(new Guid("1AE9C014-E3CD-4703-BD05-1B65F5F94CEB"), "Base Agility", "The base agility of the character.") { MaximumValue = MaximumBaseStatValue };
 
     /// <summary>
     /// Gets the total agility attribute definition.
@@ -44,7 +50,7 @@ public class Stats
     /// <summary>
     /// Gets the base vitality attribute definition.
     /// </summary>
-    public static AttributeDefinition BaseVitality { get; } = new(new Guid("6CA5C3A6-B109-45A5-87A7-FDCB107B4982"), "Base Vitality", string.Empty);
+    public static AttributeDefinition BaseVitality { get; } = new(new Guid("6CA5C3A6-B109-45A5-87A7-FDCB107B4982"), "Base Vitality", string.Empty) { MaximumValue = MaximumBaseStatValue };
 
     /// <summary>
     /// Gets the total vitality attribute definition.
@@ -59,7 +65,7 @@ public class Stats
     /// <summary>
     /// Gets the base energy attribute definition.
     /// </summary>
-    public static AttributeDefinition BaseEnergy { get; } = new(new Guid("01B0EF28-F7A0-46B5-97BA-2B624A54CD75"), "Base Energy", string.Empty);
+    public static AttributeDefinition BaseEnergy { get; } = new(new Guid("01B0EF28-F7A0-46B5-97BA-2B624A54CD75"), "Base Energy", string.Empty) { MaximumValue = MaximumBaseStatValue };
 
     /// <summary>
     /// Gets the total energy attribute definition.
@@ -74,7 +80,7 @@ public class Stats
     /// <summary>
     /// Gets the base leadership attribute definition.
     /// </summary>
-    public static AttributeDefinition BaseLeadership { get; } = new(new Guid("6AF2C9DF-3AE4-4721-8462-9A8EC7F56FE4"), "Base Leadership", string.Empty);
+    public static AttributeDefinition BaseLeadership { get; } = new(new Guid("6AF2C9DF-3AE4-4721-8462-9A8EC7F56FE4"), "Base Leadership", string.Empty) { MaximumValue = MaximumBaseStatValue };
 
     /// <summary>
     /// Gets the total leadership attribute definition.

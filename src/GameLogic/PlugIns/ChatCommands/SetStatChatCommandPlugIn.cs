@@ -56,9 +56,12 @@ public class SetStatChatCommandPlugIn : ChatCommandPlugInBase<SetStatChatCommand
             return;
         }
 
-        if (attribute.MaximumValue < 0 || arguments.Amount > attribute.MaximumValue)
+        var maximumValue = Math.Min(
+            attribute.MaximumValue ?? Stats.MaximumBaseStatValue,
+            Stats.MaximumBaseStatValue);
+        if (maximumValue < 0 || arguments.Amount > maximumValue)
         {
-            await player.ShowLocalizedBlueMessageAsync(nameof(PlayerMessage.InvalidStatValueRange), arguments.StatType, attribute.MaximumValue).ConfigureAwait(false);
+            await player.ShowLocalizedBlueMessageAsync(nameof(PlayerMessage.InvalidStatValueRange), arguments.StatType, maximumValue).ConfigureAwait(false);
             return;
         }
 

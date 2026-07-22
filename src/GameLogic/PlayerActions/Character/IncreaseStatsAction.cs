@@ -5,6 +5,7 @@
 namespace MUnique.OpenMU.GameLogic.PlayerActions.Character;
 
 using MUnique.OpenMU.AttributeSystem;
+using MUnique.OpenMU.GameLogic.Attributes;
 using MUnique.OpenMU.GameLogic.Views;
 using MUnique.OpenMU.GameLogic.Views.Character;
 using MUnique.OpenMU.Interfaces;
@@ -41,15 +42,20 @@ public class IncreaseStatsAction
         var attributeDef = selectedCharacter.CharacterClass?.GetStatAttribute(targetAttribute);
         if (attributeDef is { IncreasableByPlayer: true })
         {
-            if (attributeDef.Attribute?.MaximumValue is { } maximumValue
-                && player.Attributes![attributeDef.Attribute] is { } current
-                && current + amount > maximumValue)
+            var maximumValue = Math.Min(
+                attributeDef.Attribute?.MaximumValue ?? Stats.MaximumBaseStatValue,
+                Stats.MaximumBaseStatValue);
+            if (player.Attributes![attributeDef.Attribute] is { } current)
             {
-                amount = (ushort)(maximumValue - current);
-                if (amount == 0)
+                if (current >= maximumValue)
                 {
-                    await player.ShowLocalizedBlueMessageAsync(nameof(PlayerMessage.MaximumAttributeValueReachedFormat), attributeDef.Attribute?.MaximumValue, new LocalizedString(attributeDef.Attribute?.Designation).GetTranslation(player.Culture)).ConfigureAwait(false);
+                    await player.ShowLocalizedBlueMessageAsync(nameof(PlayerMessage.MaximumAttributeValueReachedFormat), maximumValue, new LocalizedString(attributeDef.Attribute?.Designation).GetTranslation(player.Culture)).ConfigureAwait(false);
                     return;
+                }
+
+                if (current + amount > maximumValue)
+                {
+                    amount = (ushort)(maximumValue - current);
                 }
             }
 
