@@ -26,8 +26,6 @@ using MUnique.OpenMU.PlugIns;
 [MinimumClient(5, 0, ClientLanguage.Invariant)]
 public class NewPlayersInScopePlugIn : INewPlayersInScopePlugIn
 {
-    private static readonly AppearanceSerializer TransformedAppearanceSerializer = new();
-
     /// <summary>
     /// Initializes a new instance of the <see cref="NewPlayersInScopePlugIn"/> class.
     /// </summary>
@@ -190,20 +188,24 @@ public class NewPlayersInScopePlugIn : INewPlayersInScopePlugIn
 
         int Write()
         {
-            // Packet 0x45 always carries the legacy 18-byte appearance block, even for
-            // clients which use the 27-byte extended appearance in packet 0x12.
-            var appearanceSerializer = TransformedAppearanceSerializer;
+            var appearanceSerializer = this.Player.AppearanceSerializer;
             var activeEffects = newPlayer.MagicEffectList.VisibleEffects;
-            const int estimatedEffectsPerPlayer = 5;
-            var estimatedSizePerCharacter = AddTransformedCharactersToScopeRef.CharacterDataRef.GetRequiredSize(Math.Max(estimatedEffectsPerPlayer, activeEffects.Count));
-            var estimatedSize = AddTransformedCharactersToScopeRef.GetRequiredSize(1, estimatedSizePerCharacter);
-            var span = connection.Output.GetSpan(estimatedSize)[..estimatedSize];
+            const int maxEffectsPerPlayer = 16;
+            var effectCount = Math.Min(activeEffects.Count, maxEffectsPerPlayer);
+            var appearanceSize = appearanceSerializer.NeededSpace;
+            var effectCapacity = appearanceSize > 18 ? maxEffectsPerPlayer : effectCount;
+            var requiredSize = 5 + 19 + appearanceSize + 1 + effectCapacity;
+            var span = connection.Output.GetSpan(requiredSize)[..requiredSize];
+            span.Clear();
             var packet = new AddTransformedCharactersToScopeRef(span)
             {
                 CharacterCount = 1,
             };
 
-            var playerBlock = packet[0];
+            // The generated packet model describes the legacy 18-byte appearance.
+            // Newer clients use 27 bytes in the same packet, so fields which follow
+            // the appearance have to be placed using the negotiated serializer size.
+            var playerBlock = new AddTransformedCharactersToScopeRef.CharacterDataRef(span[5..]);
             playerBlock.Id = newPlayer.GetId(this.Player);
             if (isSpawned)
             {
@@ -213,7 +215,8 @@ public class NewPlayersInScopePlugIn : INewPlayersInScopePlugIn
             playerBlock.CurrentPositionX = newPlayer.Position.X;
             playerBlock.CurrentPositionY = newPlayer.Position.Y;
 
-            appearanceSerializer.WriteAppearanceData(playerBlock.Appearance, newPlayer.AppearanceData, true); // 4 ... 21
+            const int appearanceOffset = 5 + 19;
+            appearanceSerializer.WriteAppearanceData(span.Slice(appearanceOffset, appearanceSize), newPlayer.AppearanceData, true);
             playerBlock.Name = selectedCharacter.Name;
             if (newPlayer.IsWalking)
             {
@@ -229,19 +232,18 @@ public class NewPlayersInScopePlugIn : INewPlayersInScopePlugIn
             playerBlock.Rotation = newPlayer.Rotation.ToPacketByte();
             playerBlock.HeroState = selectedCharacter.State.Convert();
 
-            playerBlock.EffectCount = (byte)activeEffects.Count;
             playerBlock.Skin = (ushort)newPlayer.Attributes![Stats.TransformationSkin];
-            for (int e = playerBlock.EffectCount - 1; e >= 0; e--)
+            var effectCountOffset = appearanceOffset + appearanceSize;
+            span[effectCountOffset] = (byte)effectCount;
+            for (int e = 0; e < effectCount; e++)
             {
-                var effectBlock = playerBlock[e];
-                effectBlock.Id = (byte)activeEffects[e].Id;
+                span[effectCountOffset + 1 + e] = (byte)activeEffects[e].Id;
             }
 
-            // The calculation of the final size is not a requirement, but we do it to save some traffic.
-            // The original server also doesn't send more bytes than necessary.
-            var finalSize = packet.FinalSize;
-            span.Slice(0, finalSize).SetPacketSize();
-            return finalSize;
+            // The current 2.04d client validates against its fixed 16-effect struct.
+            // The packet contains one character, so unused zeroed effect slots are harmless.
+            span.SetPacketSize();
+            return span.Length;
         }
 
         await connection.SendAsync(Write).ConfigureAwait(false);
