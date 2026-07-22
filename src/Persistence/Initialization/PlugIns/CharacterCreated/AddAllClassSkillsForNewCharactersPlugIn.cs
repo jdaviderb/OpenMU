@@ -13,11 +13,11 @@ using MUnique.OpenMU.GameLogic.PlugIns;
 using MUnique.OpenMU.PlugIns;
 
 /// <summary>
-/// Promotes a newly created character to its final evolution and assigns every learnable non-master skill.
+/// Promotes a newly created character to its final evolution and assigns every permanent non-master class skill.
 /// </summary>
 /// <remarks>
-/// Skill requirements still apply when the character tries to use a skill. Master skills are
-/// deliberately excluded because they are learned through the master skill tree.
+/// Master and event-only skills are deliberately excluded. The three Summoner books are included
+/// even though OpenMU models them as equipment skills, because this server treats them as permanent class skills.
 /// </remarks>
 [Guid("16F89612-A63A-4A51-81A7-F3C30223D6AB")]
 [PlugIn]
@@ -90,7 +90,9 @@ public class AddAllClassSkillsForNewCharactersPlugIn : ICharacterCreatedPlugIn
     private static HashSet<short> GetLearnableSkillNumbers(IEnumerable<ItemDefinition> itemDefinitions)
     {
         var result = new HashSet<short>();
-        foreach (var itemDefinition in itemDefinitions.Where(item => item.Skill is not null && item.ItemSlot is null))
+        foreach (var itemDefinition in itemDefinitions.Where(item =>
+                     item.Skill is not null
+                     && (item.ItemSlot is null || IsPermanentSummonerBook(item))))
         {
             var baseSkillNumber = itemDefinition.Skill!.Number;
             result.Add(baseSkillNumber);
@@ -106,5 +108,11 @@ public class AddAllClassSkillsForNewCharactersPlugIn : ICharacterCreatedPlugIn
         }
 
         return result;
+    }
+
+    private static bool IsPermanentSummonerBook(ItemDefinition itemDefinition)
+    {
+        // Book of Sahamutt, Book of Neil and Book of Ghost Phantom.
+        return itemDefinition.Group == 5 && itemDefinition.Number is >= 21 and <= 23;
     }
 }

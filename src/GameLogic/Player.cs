@@ -1530,16 +1530,11 @@ public class Player : AsyncDisposable, IBucketMapObserver, IAttackable, IAttacke
     /// </summary>
     /// <param name="skill">The skill which should get performed.</param>
     /// <returns>
-    ///     <c>True</c>, if the <see cref="Skill.ConsumeRequirements"/> and <see cref="Skill.Requirements"/>
-    ///     are being met, and the <see cref="Skill.ConsumeRequirements"/> have been consumed; Otherwise, <c>false</c>.
+    ///     <c>True</c>, if the <see cref="Skill.ConsumeRequirements"/> are being met and consumed;
+    ///     otherwise, <c>false</c>. This server intentionally makes learned class skills usable from level 1.
     /// </returns>
     public async ValueTask<bool> TryConsumeForSkillAsync(Skill skill)
     {
-        if (skill.Requirements.Any(r => r.MinimumValue > this.Attributes![r.Attribute]))
-        {
-            return false;
-        }
-
         var addExtraManaCost = this.Attributes![Stats.AmmunitionConsumptionRate] == 0
             && skill.SkillType is SkillType.DirectHit or SkillType.AreaSkillAutomaticHits;
         if (skill.ConsumeRequirements.Any(r => this.GetRequiredValue(r, addExtraManaCost) > this.Attributes![r.Attribute]))
