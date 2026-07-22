@@ -26,6 +26,8 @@ using MUnique.OpenMU.PlugIns;
 [MinimumClient(5, 0, ClientLanguage.Invariant)]
 public class NewPlayersInScopePlugIn : INewPlayersInScopePlugIn
 {
+    private static readonly AppearanceSerializer TransformedAppearanceSerializer = new();
+
     /// <summary>
     /// Initializes a new instance of the <see cref="NewPlayersInScopePlugIn"/> class.
     /// </summary>
@@ -188,7 +190,9 @@ public class NewPlayersInScopePlugIn : INewPlayersInScopePlugIn
 
         int Write()
         {
-            var appearanceSerializer = this.Player.AppearanceSerializer;
+            // Packet 0x45 always carries the legacy 18-byte appearance block, even for
+            // clients which use the 27-byte extended appearance in packet 0x12.
+            var appearanceSerializer = TransformedAppearanceSerializer;
             var activeEffects = newPlayer.MagicEffectList.VisibleEffects;
             const int estimatedEffectsPerPlayer = 5;
             var estimatedSizePerCharacter = AddTransformedCharactersToScopeRef.CharacterDataRef.GetRequiredSize(Math.Max(estimatedEffectsPerPlayer, activeEffects.Count));
