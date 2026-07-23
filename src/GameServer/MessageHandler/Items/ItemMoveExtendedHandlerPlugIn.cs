@@ -34,6 +34,13 @@ internal class ItemMoveExtendedHandlerPlugIn : IPacketHandlerPlugIn
     {
         ItemMoveRequestExtended message = packet;
 
+        // A malformed client used to make Convert throw for values such as 255,
+        // aborting packet handling instead of simply rejecting the move.
+        if (!Enum.IsDefined(message.FromStorage) || !Enum.IsDefined(message.ToStorage))
+        {
+            return;
+        }
+
         // we don't transmit the item binary data anymore in this extended message.
         await this._moveAction.MoveItemAsync(player, message.FromSlot, message.FromStorage.Convert(), message.ToSlot, message.ToStorage.Convert()).ConfigureAwait(false);
     }
