@@ -110,13 +110,13 @@ public abstract class PacketPipeReaderBase
                 length = this._headerBuffer.AsSpan().GetPacketSize();
                 if (length == 0)
                 {
-                    var exception = new InvalidPacketHeaderException(this._headerBuffer, result.Buffer, buffer.Start);
-
-                    // Notify our source, that we don't intend to read anymore.
-                    await this.Source.CompleteAsync(exception).ConfigureAwait(false);
-
-                    await this.OnCompleteAsync(exception).ConfigureAwait(false);
-                    throw exception;
+                    // A malformed header (a client hiccup, stray 00 00 00 during teardown, or a
+                    // corrupted length byte) used to disconnect the player — a bad experience for a
+                    // transient glitch. Instead, drop one byte and try to resynchronize with the next
+                    // valid packet header. The connection stays alive; genuine garbage just drains.
+                    buffer = buffer.Slice(1);
+                    length = null;
+                    continue;
                 }
             }
 
