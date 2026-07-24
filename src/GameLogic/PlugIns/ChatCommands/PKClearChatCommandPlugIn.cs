@@ -95,7 +95,8 @@ public class PkClearChatCommandPlugIn : ChatCommandPlugInBase<PkClearChatCommand
 
         if (!isGameMaster)
         {
-            var cost = (long)targetCharacter.PlayerKillCount * configuration.ZenCostPerKill;
+            // Flat cost to clear PK, independent of the kill count (owner request).
+            var cost = (long)configuration.ZenCostPerKill;
             if (cost > int.MaxValue)
             {
                 cost = int.MaxValue;
@@ -129,8 +130,8 @@ public class PkClearChatCommandPlugIn : ChatCommandPlugInBase<PkClearChatCommand
         /// <summary>
         /// Gets or sets the Zen cost per kill.
         /// </summary>
-        [Display(Name = "Zen Cost Per Kill", Description = "The amount of Zen required to clear one PK count.")]
-        public int ZenCostPerKill { get; set; } = 10_000_000;
+        [Display(Name = "Zen Cost To Clear PK", Description = "The flat amount of Zen required to clear PK status, regardless of kill count.")]
+        public int ZenCostPerKill { get; set; } = 12_000_000;
 
         /// <summary>
         /// Gets or sets a value indicating whether regular players are allowed to clear their PK status.
